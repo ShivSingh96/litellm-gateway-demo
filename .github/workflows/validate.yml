@@ -1,0 +1,41 @@
+name: Validate
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+
+  validate-compose:
+    name: Docker Compose syntax
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check compose config is valid
+        run: docker compose config --quiet
+
+  lint-python:
+    name: Ruff lint — load generator
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install ruff --quiet
+      - name: Lint
+        run: ruff check load_generator/
+
+  validate-yaml:
+    name: YAML syntax — all configs and keda manifests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Parse all YAML files
+        run: |
+          find config/ keda/ -name "*.yaml" -o -name "*.yml" | while read f; do
+            python3 -c "import yaml, sys; list(yaml.safe_load_all(open('$f')))" \
+              && echo "OK: $f" \
+              || { echo "FAIL: $f"; exit 1; }
+          done
