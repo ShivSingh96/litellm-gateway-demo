@@ -2,7 +2,7 @@
   "title": "LLM Gateway",
   "uid": "llm-gateway-001",
   "schemaVersion": 39,
-  "version": 1,
+  "version": 2,
   "refresh": "10s",
   "time": { "from": "now-15m", "to": "now" },
   "timezone": "browser",
@@ -12,24 +12,21 @@
       "id": 1,
       "type": "stat",
       "title": "Total Requests",
-      "description": "Cumulative requests since LiteLLM started",
+      "description": "Cumulative proxy requests since LiteLLM started",
       "gridPos": { "h": 3, "w": 6, "x": 0, "y": 0 },
       "datasource": { "type": "prometheus", "uid": "demo-prometheus" },
       "options": {
-        "reduceOptions": { "calcs": ["sum"] },
+        "reduceOptions": { "calcs": ["lastNotNull"] },
         "colorMode": "value",
-        "graphMode": "area",
-        "textMode": "auto"
+        "graphMode": "area"
       },
       "fieldConfig": {
         "defaults": { "unit": "short", "color": { "mode": "thresholds" },
-          "thresholds": { "mode": "absolute", "steps": [
-            { "color": "blue", "value": null }
-          ]}
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "blue", "value": null }] }
         }
       },
       "targets": [
-        { "expr": "sum(litellm_requests_total)", "legendFormat": "", "instant": true }
+        { "expr": "sum(litellm_proxy_total_requests_metric_total)", "legendFormat": "", "instant": true }
       ]
     },
     {
@@ -44,11 +41,9 @@
         "colorMode": "value",
         "graphMode": "area"
       },
-      "fieldConfig": {
-        "defaults": { "unit": "reqps", "decimals": 2 }
-      },
+      "fieldConfig": { "defaults": { "unit": "reqps", "decimals": 2 } },
       "targets": [
-        { "expr": "sum(rate(litellm_requests_total[1m]))", "legendFormat": "" }
+        { "expr": "sum(rate(litellm_proxy_total_requests_metric_total[1m]))", "legendFormat": "" }
       ]
     },
     {
@@ -74,7 +69,7 @@
       },
       "targets": [
         {
-          "expr": "histogram_quantile(0.99, sum by (le) (rate(litellm_request_total_latency_seconds_bucket[5m])))",
+          "expr": "histogram_quantile(0.99, sum by (le) (rate(litellm_request_total_latency_metric_bucket[5m])))",
           "legendFormat": "p99"
         }
       ]
@@ -83,7 +78,7 @@
       "id": 4,
       "type": "stat",
       "title": "Error Rate",
-      "description": "Fraction of requests returning 5xx from LiteLLM deployments",
+      "description": "Fraction of LLM deployment calls that failed",
       "gridPos": { "h": 3, "w": 6, "x": 18, "y": 0 },
       "datasource": { "type": "prometheus", "uid": "demo-prometheus" },
       "options": {
@@ -102,7 +97,7 @@
       },
       "targets": [
         {
-          "expr": "sum(rate(litellm_deployment_failure_responses[1m])) / (sum(rate(litellm_deployment_success_responses[1m])) + sum(rate(litellm_deployment_failure_responses[1m])) + 0.001)",
+          "expr": "1 - (sum(rate(litellm_deployment_success_responses_total[1m])) / (sum(rate(litellm_deployment_total_requests_total[1m])) + 0.001))",
           "legendFormat": ""
         }
       ]
@@ -125,7 +120,7 @@
       },
       "targets": [
         {
-          "expr": "sum by (requested_model) (rate(litellm_requests_total[1m]))",
+          "expr": "sum by (requested_model) (rate(litellm_proxy_total_requests_metric_total[1m]))",
           "legendFormat": "{{ requested_model }}"
         }
       ]
@@ -134,7 +129,7 @@
       "id": 6,
       "type": "timeseries",
       "title": "Latency by Model — p50 and p99",
-      "description": "Latency percentiles per model. Mock mode shows near-zero; real APIs show actual network latency.",
+      "description": "Latency percentiles per model. Mock mode shows near-zero; real APIs show actual network round-trip.",
       "gridPos": { "h": 8, "w": 12, "x": 0, "y": 11 },
       "datasource": { "type": "prometheus", "uid": "demo-prometheus" },
       "fieldConfig": {
@@ -148,11 +143,11 @@
       },
       "targets": [
         {
-          "expr": "histogram_quantile(0.50, sum by (requested_model, le) (rate(litellm_request_total_latency_seconds_bucket[5m])))",
+          "expr": "histogram_quantile(0.50, sum by (requested_model, le) (rate(litellm_request_total_latency_metric_bucket[5m])))",
           "legendFormat": "p50 {{ requested_model }}"
         },
         {
-          "expr": "histogram_quantile(0.99, sum by (requested_model, le) (rate(litellm_request_total_latency_seconds_bucket[5m])))",
+          "expr": "histogram_quantile(0.99, sum by (requested_model, le) (rate(litellm_request_total_latency_metric_bucket[5m])))",
           "legendFormat": "p99 {{ requested_model }}"
         }
       ]
@@ -161,14 +156,13 @@
       "id": 7,
       "type": "timeseries",
       "title": "Tokens / min by Model",
-      "description": "Token throughput — key for cost tracking. Total tokens = prompt + completion.",
+      "description": "Total token throughput (input + output). Key for cost tracking and quota management.",
       "gridPos": { "h": 8, "w": 12, "x": 12, "y": 11 },
       "datasource": { "type": "prometheus", "uid": "demo-prometheus" },
       "fieldConfig": {
         "defaults": {
           "unit": "short",
-          "custom": { "lineWidth": 2, "fillOpacity": 8 },
-          "displayName": "tokens/min"
+          "custom": { "lineWidth": 2, "fillOpacity": 8 }
         }
       },
       "options": {
@@ -176,8 +170,32 @@
       },
       "targets": [
         {
-          "expr": "sum by (litellm_model_name) (rate(litellm_deployment_total_tokens[1m])) * 60",
-          "legendFormat": "{{ litellm_model_name }}"
+          "expr": "sum by (requested_model) (rate(litellm_total_tokens_metric_total[1m])) * 60",
+          "legendFormat": "{{ requested_model }}"
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "type": "timeseries",
+      "title": "Cumulative Spend by Model (USD)",
+      "description": "Tracked spend from LiteLLM cost map. Shows $0 for mock_response models — connects to real cost data when using live API keys.",
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 19 },
+      "datasource": { "type": "prometheus", "uid": "demo-prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "currencyUSD",
+          "decimals": 6,
+          "custom": { "lineWidth": 2, "fillOpacity": 8 }
+        }
+      },
+      "options": {
+        "legend": { "displayMode": "table", "placement": "right", "calcs": ["lastNotNull", "max"] }
+      },
+      "targets": [
+        {
+          "expr": "sum by (requested_model) (litellm_spend_metric_total)",
+          "legendFormat": "{{ requested_model }}"
         }
       ]
     }
