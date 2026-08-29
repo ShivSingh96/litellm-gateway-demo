@@ -1,0 +1,185 @@
+{
+  "title": "LLM Gateway",
+  "uid": "llm-gateway-001",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "10s",
+  "time": { "from": "now-15m", "to": "now" },
+  "timezone": "browser",
+  "tags": ["litellm", "llm", "platform-engineering"],
+  "panels": [
+    {
+      "id": 1,
+      "type": "stat",
+      "title": "Total Requests",
+      "description": "Cumulative requests since LiteLLM started",
+      "gridPos": { "h": 3, "w": 6, "x": 0, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "demo-prometheus" },
+      "options": {
+        "reduceOptions": { "calcs": ["sum"] },
+        "colorMode": "value",
+        "graphMode": "area",
+        "textMode": "auto"
+      },
+      "fieldConfig": {
+        "defaults": { "unit": "short", "color": { "mode": "thresholds" },
+          "thresholds": { "mode": "absolute", "steps": [
+            { "color": "blue", "value": null }
+          ]}
+        }
+      },
+      "targets": [
+        { "expr": "sum(litellm_requests_total)", "legendFormat": "", "instant": true }
+      ]
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "Current Req/sec",
+      "description": "Request rate over the last 1 minute",
+      "gridPos": { "h": 3, "w": 6, "x": 6, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "demo-prometheus" },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "colorMode": "value",
+        "graphMode": "area"
+      },
+      "fieldConfig": {
+        "defaults": { "unit": "reqps", "decimals": 2 }
+      },
+      "targets": [
+        { "expr": "sum(rate(litellm_requests_total[1m]))", "legendFormat": "" }
+      ]
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "p99 Latency",
+      "description": "99th percentile end-to-end latency across all models",
+      "gridPos": { "h": 3, "w": 6, "x": 12, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "demo-prometheus" },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "colorMode": "background"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "thresholds": { "mode": "absolute", "steps": [
+            { "color": "green", "value": null },
+            { "color": "yellow", "value": 1 },
+            { "color": "red",   "value": 5 }
+          ]}
+        }
+      },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.99, sum by (le) (rate(litellm_request_total_latency_seconds_bucket[5m])))",
+          "legendFormat": "p99"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "Error Rate",
+      "description": "Fraction of requests returning 5xx from LiteLLM deployments",
+      "gridPos": { "h": 3, "w": 6, "x": 18, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "demo-prometheus" },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "colorMode": "background"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "thresholds": { "mode": "absolute", "steps": [
+            { "color": "green",  "value": null },
+            { "color": "yellow", "value": 0.01 },
+            { "color": "red",    "value": 0.05 }
+          ]}
+        }
+      },
+      "targets": [
+        {
+          "expr": "sum(rate(litellm_deployment_failure_responses[1m])) / (sum(rate(litellm_deployment_success_responses[1m])) + sum(rate(litellm_deployment_failure_responses[1m])) + 0.001)",
+          "legendFormat": ""
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "type": "timeseries",
+      "title": "Requests / sec by Model",
+      "description": "Per-model request rate — shows which models are taking traffic",
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 3 },
+      "datasource": { "type": "prometheus", "uid": "demo-prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "custom": { "lineWidth": 2, "fillOpacity": 10 }
+        }
+      },
+      "options": {
+        "legend": { "displayMode": "table", "placement": "right", "calcs": ["mean", "max"] }
+      },
+      "targets": [
+        {
+          "expr": "sum by (requested_model) (rate(litellm_requests_total[1m]))",
+          "legendFormat": "{{ requested_model }}"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "type": "timeseries",
+      "title": "Latency by Model — p50 and p99",
+      "description": "Latency percentiles per model. Mock mode shows near-zero; real APIs show actual network latency.",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 11 },
+      "datasource": { "type": "prometheus", "uid": "demo-prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "custom": { "lineWidth": 2, "fillOpacity": 8 }
+        }
+      },
+      "options": {
+        "legend": { "displayMode": "table", "placement": "right", "calcs": ["mean"] }
+      },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.50, sum by (requested_model, le) (rate(litellm_request_total_latency_seconds_bucket[5m])))",
+          "legendFormat": "p50 {{ requested_model }}"
+        },
+        {
+          "expr": "histogram_quantile(0.99, sum by (requested_model, le) (rate(litellm_request_total_latency_seconds_bucket[5m])))",
+          "legendFormat": "p99 {{ requested_model }}"
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "type": "timeseries",
+      "title": "Tokens / min by Model",
+      "description": "Token throughput — key for cost tracking. Total tokens = prompt + completion.",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 11 },
+      "datasource": { "type": "prometheus", "uid": "demo-prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": { "lineWidth": 2, "fillOpacity": 8 },
+          "displayName": "tokens/min"
+        }
+      },
+      "options": {
+        "legend": { "displayMode": "table", "placement": "right", "calcs": ["mean", "max"] }
+      },
+      "targets": [
+        {
+          "expr": "sum by (litellm_model_name) (rate(litellm_deployment_total_tokens[1m])) * 60",
+          "legendFormat": "{{ litellm_model_name }}"
+        }
+      ]
+    }
+  ]
+}
