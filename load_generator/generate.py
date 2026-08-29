@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """
 Load generator for llm-gateway-demo.
 
@@ -20,8 +19,8 @@ import json
 import random
 import statistics
 import time
-import urllib.request
 import urllib.error
+import urllib.request
 
 PROMPTS = [
     "Summarize the benefits of microservices architecture in two sentences.",
@@ -85,7 +84,7 @@ def _send(url: str, master_key: str, team_name: str, team: dict) -> dict:
         latency = time.monotonic() - start
         return {"team": team_name, "model": model, "status": f"http_{e.code}",
                 "latency": latency, "tokens": 0}
-    except Exception as e:
+    except (urllib.error.URLError, OSError, TimeoutError) as e:
         latency = time.monotonic() - start
         return {"team": team_name, "model": model, "status": "error",
                 "latency": latency, "tokens": 0, "error": str(e)[:80]}
@@ -146,7 +145,7 @@ def main() -> None:
     deadline = time.monotonic() + args.duration
     results: list[dict] = []
 
-    print(f"LiteLLM load generator")
+    print("LiteLLM load generator")
     print(f"  target  : {args.url}")
     print(f"  rate    : {args.rps} req/s for {args.duration}s")
     print(f"  workers : {args.workers}")
