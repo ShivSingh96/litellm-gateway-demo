@@ -1,0 +1,11 @@
+apiVersion: 1
+
+datasources:
+  - name: Prometheus
+    type: prometheus
+    uid: demo-prometheus          # referenced by uid in llm-gateway.json
+    url: http://prometheus:9090
+    isDefault: true
+    access: proxy
+    jsonData:
+      timeInterval: "15s"
