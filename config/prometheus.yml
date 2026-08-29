@@ -8,4 +8,6 @@ scrape_configs:
       - targets: ["litellm:4000"]
     metrics_path: /metrics
     scrape_timeout: 10s
-    
+    authorization:
+      type: Bearer
+      credentials: sk-demo-master-key
