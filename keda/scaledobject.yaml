@@ -1,0 +1,64 @@
+# KEDA ScaledObject for LiteLLM Gateway
+#
+# Prerequisites:
+#   - KEDA installed on the cluster (helm install keda kedacore/keda -n keda --create-namespace)
+#   - LiteLLM deployed as a Deployment named "litellm" in namespace "llm-gateway"
+#   - Redis running as "redis" Service in the same namespace
+#   - Prometheus running and scraping LiteLLM
+#
+# This ScaledObject uses two independent triggers — KEDA scales up when EITHER fires:
+#   1. Redis list length > 10  (burst queue depth — immediate scale trigger)
+#   2. Prometheus request rate > 50 req/sec/replica  (sustained traffic scale)
+
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: litellm-gateway
+  namespace: llm-gateway
+  annotations:
+    # Why two triggers: Redis catches sudden bursts before Prometheus has enough data;
+    # Prometheus trigger handles sustained load where the queue drains but rate stays high.
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: litellm
+
+  pollingInterval: 15       # check triggers every 15 seconds
+  cooldownPeriod: 60        # wait 60s after last trigger fires before scaling down
+  minReplicaCount: 1        # always keep 1 replica warm
+  maxReplicaCount: 10       # cap — prevents runaway scaling on unexpected traffic
+
+  triggers:
+
+    # Trigger 1: Redis request queue depth
+    # LiteLLM queues async requests to Redis when the proxy is overloaded.
+    # Scale up 1 replica for every 10 items in the queue.
+    - type: redis
+      metadata:
+        address: redis.llm-gateway.svc.cluster.local:6379
+        listName: litellm:async_request_queue
+        listLength: "10"                    # target: 10 items per replica
+
+    # Trigger 2: Prometheus request rate
+    # Scale based on sustained request rate — 1 replica per 50 req/sec.
+    # Gives head-room for latency spikes before Redis queue builds up.
+    - type: prometheus
+      metadata:
+        serverAddress: http://prometheus.llm-gateway.svc.cluster.local:9090
+        metricName: litellm_request_rate
+        query: sum(rate(litellm_requests_total[1m]))
+        threshold: "50"                     # target: 50 req/sec per replica
+
+---
+# Companion: PodDisruptionBudget to keep at least 1 pod available during cluster maintenance
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: litellm-gateway
+  namespace: llm-gateway
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: litellm
