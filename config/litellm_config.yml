@@ -1,0 +1,48 @@
+# LiteLLM proxy configuration
+#
+# Three models available, all using mock_response by default.
+# Remove the mock_response line and set a real api_key to use live APIs.
+# See README.md for how to switch to real API keys.
+
+model_list:
+
+  - model_name: gpt-3.5-turbo
+    litellm_params:
+      model: openai/gpt-3.5-turbo
+      api_key: os.environ/OPENAI_API_KEY
+      mock_response: "Mock GPT-3.5-Turbo: fast, cost-effective, good for summarization and classification"
+      rpm: 100      # requests per minute cap — enforced via Redis
+      tpm: 100000   # tokens per minute cap
+
+  - model_name: gpt-4
+    litellm_params:
+      model: openai/gpt-4
+      api_key: os.environ/OPENAI_API_KEY
+      mock_response: "Mock GPT-4: higher reasoning quality, higher cost — use for complex tasks"
+      rpm: 20       # lower RPM mirrors real GPT-4 rate limits
+      tpm: 40000
+
+  - model_name: claude-haiku
+    litellm_params:
+      model: anthropic/claude-3-haiku-20240307
+      api_key: os.environ/ANTHROPIC_API_KEY
+      mock_response: "Mock Claude Haiku: fastest Anthropic model, low latency, strong for structured output"
+      rpm: 80
+      tpm: 80000
+
+router_settings:
+  routing_strategy: simple-shuffle   # distribute across models with the same name
+  num_retries: 2                      # retry on transient errors
+
+litellm_settings:
+  callbacks: ["prometheus"]           # enables /metrics endpoint + Prometheus scraping
+  request_timeout: 15
+  drop_params: true                   # ignore unknown params (safer across model providers)
+  fallbacks:
+    - {"gpt-4": ["gpt-3.5-turbo"]}   # gpt-4 failure → fall back to gpt-3.5-turbo
+
+general_settings:
+  master_key: os.environ/LITELLM_MASTER_KEY
+  store_model_in_db: false            # no database needed for this demo
+  redis_host: os.environ/REDIS_HOST
+  redis_port: os.environ/REDIS_PORT
