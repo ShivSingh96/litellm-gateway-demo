@@ -68,8 +68,8 @@ Built to demonstrate: LLM cost observability, team-based routing, and event-driv
 
 ```bash
 # 1. Clone and start everything (no API keys needed — uses mock responses)
-git clone https://github.com/ShivSingh96/llm-gateway-demo
-cd llm-gateway-demo
+git clone https://github.com/ShivSingh96/litellm-gateway-demo
+cd litellm-gateway-demo
 docker compose up -d
 
 # 2. Wait ~15s for all services to start
